@@ -2,7 +2,10 @@ FROM centos:7
 LABEL maintainer="Alibaba Cloud EDAS Team<edas-dev@list.alibaba-inc.com>"
 
 # Install building and running env tools
-RUN yum install -y wget \
+RUN curl -o /etc/yum.repos.d/CentOS-Base.repo https://mirrors.aliyun.com/repo/Centos-7.repo \
+    && yum clean all \
+    && yum makecache \
+    && yum install -y wget \
     unzip \
     telnet \
     lsof \
@@ -38,8 +41,15 @@ ADD ${TOMCAT_LOCATION} ${WORK_HOME}/
 
 # Set catalina location as 'edas-container'
 ENV CATALINA_HOME=${WORK_HOME}/edas-container
+ENV TZ=Asia/Shanghai
 # EDAS AliTomcat's default name is 'taobao-tomcat-production-7.0.59.3'
-RUN mv ${WORK_HOME}/taobao-tomcat-production-7.0.59.3 ${CATALINA_HOME}
+RUN mv ${WORK_HOME}/taobao-tomcat-production-7.0.59.3 ${CATALINA_HOME} \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
+    && if [ ! -L "${JAVA_HOME}" ]; then mkdir -p `dirname ${JAVA_HOME}` && ln -s `readlink -f /usr/lib/jvm/java` ${JAVA_HOME}; fi \
+    && sed -i s/\"8005\"/\"\$\{port\.shutdown\}\"/g ${CATALINA_HOME}/conf/server.xml && sed -i s/\"8080\"/\"\$\{port\.http\}\"/g ${CATALINA_HOME}/conf/server.xml \
+   && sed -i "/org.apache.catalina.valves.AccessLogValve/i <Valve className=\"org.apache.catalina.valves.AccessLogValve\" directory=\"${CATALINA_HOME}/logs\" prefix=\"localhost.\" suffix=\"_access.log\" pattern=\'%v %u %t %r %s %b \"%{Referer}i\" \"%{User-Agent}i %{X-Forwarded-For}i %T \"-\"\' resolveHosts=\"false\"/>" ${CATALINA_HOME}/conf/server.xml
+
+
 
 # Download HSF used Pandora package file into location
 ADD ${PANDORA_LOCATION} ${CATALINA_HOME}/deploy/
